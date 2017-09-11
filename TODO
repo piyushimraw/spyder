@@ -1,0 +1,5 @@
+	TASK							STATUS
+1.Add URL interface for end-user.				pending
+2.Add regular expression for analysis.				pending 
+3.Add a new data structure for multithreaded search 		done
+4.Add crawler engine to use selenium for browser		pending 
