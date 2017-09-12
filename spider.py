@@ -1,50 +1,74 @@
-import threading
-from queue import Queue
-from spider import Spider
+from urllib.request import urlopen
+from link_finder import LinkFinder
 from domain import *
 from general import *
 
-PROJECT_NAME = 'viper-seo'
-HOMEPAGE = 'http://viper-seo.com/'
-DOMAIN_NAME = get_domain_name(HOMEPAGE)
-QUEUE_FILE = PROJECT_NAME + '/queue.txt'
-CRAWLED_FILE = PROJECT_NAME + '/crawled.txt'
-NUMBER_OF_THREADS = 8
-queue = Queue()
-Spider(PROJECT_NAME, HOMEPAGE, DOMAIN_NAME)
 
+class Spider:
 
-# Create worker threads (will die when main exits)
-def create_workers():
-    for _ in range(NUMBER_OF_THREADS):
-        t = threading.Thread(target=work)
-        t.daemon = True
-        t.start()
+    project_name = ''
+    base_url = ''
+    domain_name = ''
+    queue_file = ''
+    crawled_file = ''
+    queue = set()
+    crawled = set()
 
+    def __init__(self, project_name, base_url, domain_name):
+        Spider.project_name = project_name
+        Spider.base_url = base_url
+        Spider.domain_name = domain_name
+        Spider.queue_file = Spider.project_name + '/queue.txt'
+        Spider.crawled_file = Spider.project_name + '/crawled.txt'
+        self.boot()
+        self.crawl_page('First spider', Spider.base_url)
 
-# Do the next job in the queue
-def work():
-    while True:
-        url = queue.get()
-        Spider.crawl_page(threading.current_thread().name, url)
-        queue.task_done()
+    # Creates directory and files for project on first run and starts the spider
+    @staticmethod
+    def boot():
+        create_project_dir(Spider.project_name)
+        create_data_files(Spider.project_name, Spider.base_url)
+        Spider.queue = file_to_set(Spider.queue_file)
+        Spider.crawled = file_to_set(Spider.crawled_file)
 
+    # Updates user display, fills queue and updates files
+    @staticmethod
+    def crawl_page(thread_name, page_url):
+        if page_url not in Spider.crawled:
+            print(thread_name + ' now crawling ' + page_url)
+            print('Queue ' + str(len(Spider.queue)) + ' | Crawled  ' + str(len(Spider.crawled)))
+            Spider.add_links_to_queue(Spider.gather_links(page_url))
+            Spider.queue.remove(page_url)
+            Spider.crawled.add(page_url)
+            Spider.update_files()
 
-# Each queued link is a new job
-def create_jobs():
-    for link in file_to_set(QUEUE_FILE):
-        queue.put(link)
-    queue.join()
-    crawl()
+    # Converts raw response data into readable information and checks for proper html formatting
+    @staticmethod
+    def gather_links(page_url):
+        html_string = ''
+        try:
+            response = urlopen(page_url)
+            if 'text/html' in response.getheader('Content-Type'):
+                html_bytes = response.read()
+                html_string = html_bytes.decode("utf-8")
+            finder = LinkFinder(Spider.base_url, page_url)
+            finder.feed(html_string)
+        except Exception as e:
+            print(str(e))
+            return set()
+        return finder.page_links()
 
+    # Saves queue data to project files
+    @staticmethod
+    def add_links_to_queue(links):
+        for url in links:
+            if (url in Spider.queue) or (url in Spider.crawled):
+                continue
+            if Spider.domain_name != get_domain_name(url):
+                continue
+            Spider.queue.add(url)
 
-# Check if there are items in the queue, if so crawl them
-def crawl():
-    queued_links = file_to_set(QUEUE_FILE)
-    if len(queued_links) > 0:
-        print(str(len(queued_links)) + ' links in the queue')
-        create_jobs()
-
-
-create_workers()
-crawl()
+    @staticmethod
+    def update_files():
+        set_to_file(Spider.queue, Spider.queue_file)
+        set_to_file(Spider.crawled, Spider.crawled_file)
