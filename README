@@ -1,4 +1,7 @@
-SPYDER is a web crawler which can be used to automate various tasks.
+SPYDER is a web crawler which can be used to automate various web based tasks, such as
+    Data mining from web.
+    Automating searches on a Website.
+
 
 Implementation of web crawler without any dependencies
 
